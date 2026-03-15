@@ -45,13 +45,12 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^7.8.4",
-    "better-sqlite3": "^11.10.0",
     "diff": "^7.0.0",
     "playwright": "^1.58.2",
+    "sql.js": "^1.14.1",
     "tsx": "^4.20.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^24.0.0",
     "esbuild": "^0.25.9",
     "typescript": "^5.9.2"

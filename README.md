@@ -16,6 +16,25 @@ You can also run it non-interactively:
 npx samstack install --host opencode,claude-code,codex --module web-debug --scope project
 ```
 
+## Lifecycle management
+
+Running `npx samstack` again now lets you inspect and manage what is already installed.
+
+SamStack tracks installed items with manifests plus content checksums so it can tell you whether something is:
+
+- installed and up to date
+- installed but outdated
+- missing
+
+Available commands:
+
+```bash
+npx samstack status --host opencode --module web-debug
+npx samstack install --host opencode --module web-debug
+npx samstack update --host opencode --module web-debug
+npx samstack uninstall --host opencode --module web-debug
+```
+
 ## Browser runtime
 
 SamStack installs its browser runtime into `~/.samstack/runtime/browser` and writes host-specific skills into the correct folders for each supported tool.
@@ -55,3 +74,8 @@ License note:
 - SamStack is MIT licensed.
 - It includes adapted MIT-licensed browser/runtime code derived from `garrytan/gstack`.
 - The upstream license text is included in `UPSTREAM_LICENSE` to satisfy MIT notice requirements.
+
+Optional dependency note:
+
+- Browser cookie import support now uses a non-native SQLite path, so normal `npm install` stays free of the deprecated `prebuild-install` warning.
+- On Windows, some browsers may need to be closed before their cookie database can be copied safely.

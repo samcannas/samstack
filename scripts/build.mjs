@@ -14,7 +14,7 @@ const shared = {
   format: 'esm',
   target: 'node20',
   sourcemap: true,
-  external: ['@inquirer/prompts', 'playwright', 'better-sqlite3'],
+  external: ['@inquirer/prompts', 'playwright', 'sql.js'],
 };
 
 await build({

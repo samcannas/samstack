@@ -10,12 +10,18 @@ interface RuntimePackageInfo {
   dependencies: Record<string, string>;
 }
 
+export interface BrowserRuntimeStatus {
+  installed: boolean;
+  upToDate: boolean;
+  expectedVersion: string;
+  installedVersion: string | null;
+  runtimeDir: string;
+  browserEntryPath: string;
+}
+
 export async function ensureBrowserRuntimeInstalled(packageRoot: string): Promise<InstalledRuntime> {
   const runtimePackage = readRuntimePackageInfo(packageRoot);
-  const installRoot = path.join(os.homedir(), '.samstack', 'runtime', 'browser');
-  const runtimeEntry = path.join(installRoot, 'samstack-browser.js');
-  const serverEntry = path.join(installRoot, 'server.js');
-  const manifestPath = path.join(installRoot, 'manifest.json');
+  const { installRoot, runtimeEntry, serverEntry, manifestPath } = getRuntimePaths();
 
   await fsp.mkdir(installRoot, { recursive: true });
 
@@ -45,6 +51,27 @@ export async function ensureBrowserRuntimeInstalled(packageRoot: string): Promis
   };
 }
 
+export function getBrowserRuntimeStatus(packageRoot: string): BrowserRuntimeStatus {
+  const runtimePackage = readRuntimePackageInfo(packageRoot);
+  const { installRoot, runtimeEntry, serverEntry, manifestPath } = getRuntimePaths();
+  const expectedManifest = {
+    version: runtimePackage.version,
+    dependencies: runtimePackage.dependencies,
+  };
+  const currentManifest = readJsonFile(manifestPath) as { version?: string; dependencies?: Record<string, string> } | null;
+  const installed = fs.existsSync(runtimeEntry) && fs.existsSync(serverEntry) && fs.existsSync(path.join(installRoot, 'node_modules'));
+  const upToDate = installed && JSON.stringify(currentManifest) === JSON.stringify(expectedManifest);
+
+  return {
+    installed,
+    upToDate,
+    expectedVersion: runtimePackage.version,
+    installedVersion: currentManifest?.version ?? null,
+    runtimeDir: installRoot,
+    browserEntryPath: runtimeEntry,
+  };
+}
+
 function readRuntimePackageInfo(packageRoot: string): RuntimePackageInfo {
   const packageJsonPath = path.join(packageRoot, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as {
@@ -56,9 +83,19 @@ function readRuntimePackageInfo(packageRoot: string): RuntimePackageInfo {
     version: pkg.version,
     dependencies: {
       playwright: pkg.dependencies.playwright,
-      'better-sqlite3': pkg.dependencies['better-sqlite3'],
       diff: pkg.dependencies.diff,
+      'sql.js': pkg.dependencies['sql.js'],
     },
+  };
+}
+
+function getRuntimePaths() {
+  const installRoot = path.join(os.homedir(), '.samstack', 'runtime', 'browser');
+  return {
+    installRoot,
+    runtimeEntry: path.join(installRoot, 'samstack-browser.js'),
+    serverEntry: path.join(installRoot, 'server.js'),
+    manifestPath: path.join(installRoot, 'manifest.json'),
   };
 }
 

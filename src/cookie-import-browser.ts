@@ -1,10 +1,10 @@
-import Database from 'better-sqlite3';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import initSqlJs from 'sql.js';
 import {
   IS_MACOS,
   IS_WINDOWS,
@@ -12,7 +12,8 @@ import {
   getTempDir,
 } from './platform';
 
-type SqliteDatabase = InstanceType<typeof Database>;
+type SqlJsModule = Awaited<ReturnType<typeof initSqlJs>>;
+type SqliteDatabase = InstanceType<SqlJsModule['Database']>;
 
 export interface BrowserInfo {
   name: string;
@@ -92,6 +93,7 @@ const BROWSER_REGISTRY: BrowserInfo[] = [
 ];
 
 const keyCache = new Map<string, Buffer>();
+let sqlJsPromise: Promise<SqlJsModule> | null = null;
 
 export function findInstalledBrowsers(): BrowserInfo[] {
   return BROWSER_REGISTRY.filter((browser) => {
@@ -103,19 +105,21 @@ export function findInstalledBrowsers(): BrowserInfo[] {
   });
 }
 
-export function listDomains(browserName: string, profile = 'Default'): { domains: DomainEntry[]; browser: string } {
+export async function listDomains(browserName: string, profile = 'Default'): Promise<{ domains: DomainEntry[]; browser: string }> {
   const browser = resolveBrowser(browserName);
   const dbPath = getCookieDbPath(browser, profile);
-  const db = openDb(dbPath, browser.name);
+  const db = await openDb(dbPath, browser.name);
   try {
     const now = chromiumNow();
-    const rows = db.prepare(
+    const rows = queryAll(
+      db,
       `SELECT host_key AS domain, COUNT(*) AS count
        FROM cookies
        WHERE has_expires = 0 OR expires_utc > ?
        GROUP BY host_key
-       ORDER BY count DESC`
-    ).all(now.toString()) as DomainEntry[];
+       ORDER BY count DESC`,
+      [now.toString()],
+    ) as unknown as DomainEntry[];
     return { domains: rows, browser: browser.name };
   } finally {
     db.close();
@@ -132,19 +136,21 @@ export async function importCookies(
   const browser = resolveBrowser(browserName);
   const secret = await getDecryptionKey(browser);
   const dbPath = getCookieDbPath(browser, profile);
-  const db = openDb(dbPath, browser.name);
+  const db = await openDb(dbPath, browser.name);
 
   try {
     const now = chromiumNow();
     const placeholders = domains.map(() => '?').join(',');
-    const rows = db.prepare(
+    const rows = queryAll(
+      db,
       `SELECT host_key, name, value, encrypted_value, path, expires_utc,
               is_secure, is_httponly, has_expires, samesite
        FROM cookies
        WHERE host_key IN (${placeholders})
          AND (has_expires = 0 OR expires_utc > ?)
-       ORDER BY host_key, name`
-    ).all(...domains, now.toString()) as RawCookie[];
+       ORDER BY host_key, name`,
+      [...domains, now.toString()],
+    ) as unknown as RawCookie[];
 
     const cookies: PlaywrightCookie[] = [];
     let failed = 0;
@@ -244,50 +250,64 @@ function getCookieDbPath(browser: BrowserInfo, profile: string): string {
   return dbPath;
 }
 
-function openDb(dbPath: string, browserName: string): SqliteDatabase {
+async function openDb(dbPath: string, browserName: string): Promise<SqliteDatabase> {
   try {
-    return new Database(dbPath, { readonly: true, fileMustExist: true });
+    return await openDbFromFile(dbPath);
   } catch (err: any) {
-    if (
-      err.message?.includes('SQLITE_BUSY') ||
-      err.message?.includes('database is locked') ||
-      err.message?.includes('SQLITE_CANTOPEN') ||
-      err.code === 'SQLITE_CANTOPEN'
-    ) {
-      return openDbFromCopy(dbPath, browserName);
-    }
-    if (err.message?.includes('SQLITE_CORRUPT') || err.message?.includes('malformed')) {
-      throw new CookieImportError(`Cookie database for ${browserName} is corrupt`, 'db_corrupt');
-    }
-    throw err;
+    return await openDbFromCopy(dbPath, browserName, err);
   }
 }
 
-function openDbFromCopy(dbPath: string, browserName: string): SqliteDatabase {
+async function openDbFromCopy(dbPath: string, browserName: string, originalError?: unknown): Promise<SqliteDatabase> {
   const tempDir = fs.mkdtempSync(path.join(getTempDir(), 'samstack-cookies-'));
   const tmpPath = path.join(tempDir, `${browserName.toLowerCase()}-${crypto.randomUUID()}.db`);
 
   try {
     fs.copyFileSync(dbPath, tmpPath);
-    const walPath = dbPath + '-wal';
-    const shmPath = dbPath + '-shm';
-    if (fs.existsSync(walPath)) fs.copyFileSync(walPath, tmpPath + '-wal');
-    if (fs.existsSync(shmPath)) fs.copyFileSync(shmPath, tmpPath + '-shm');
-
-    const db = new Database(tmpPath, { readonly: true, fileMustExist: true });
+    const db = await openDbFromFile(tmpPath);
     const origClose = db.close.bind(db);
-    db.close = (() => {
+    db.close = () => {
       origClose();
       cleanupDbCopy(tmpPath);
-    }) as typeof db.close;
+    };
     return db;
-  } catch {
+  } catch (err) {
     cleanupDbCopy(tmpPath);
+    if (String((err as Error)?.message ?? '').toLowerCase().includes('malformed')) {
+      throw new CookieImportError(`Cookie database for ${browserName} is corrupt`, 'db_corrupt');
+    }
     throw new CookieImportError(
-      `Cookie database is locked (${browserName} may be running). Try closing ${browserName} first.`,
+      `Cookie database could not be read (${browserName} may be running or the database may be locked). Try closing ${browserName} first.${originalError ? ` ${String((originalError as Error).message ?? originalError)}` : ''}`,
       'db_locked',
       'retry',
     );
+  }
+}
+
+async function getSqlJs(): Promise<SqlJsModule> {
+  if (!sqlJsPromise) {
+    sqlJsPromise = initSqlJs();
+  }
+  return await sqlJsPromise;
+}
+
+async function openDbFromFile(filePath: string): Promise<SqliteDatabase> {
+  const SQL = await getSqlJs();
+  const buffer = fs.readFileSync(filePath);
+  return new SQL.Database(new Uint8Array(buffer));
+}
+
+function queryAll(db: SqliteDatabase, sql: string, params: any[] = []): Record<string, unknown>[] {
+  const stmt = db.prepare(sql);
+  try {
+    if (params.length > 0) stmt.bind(params);
+    const rows: Record<string, unknown>[] = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject() as Record<string, unknown>);
+    }
+    return rows;
+  } finally {
+    stmt.free();
   }
 }
 
