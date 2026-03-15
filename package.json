@@ -1,0 +1,59 @@
+{
+  "name": "samstack",
+  "version": "0.1.0",
+  "private": false,
+  "description": "SamStack installer plus a persistent Playwright browser runtime for AI harnesses.",
+  "author": "Samuele Cannas",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://github.com/samcannas/samstack#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samcannas/samstack.git"
+  },
+  "bugs": {
+    "url": "https://github.com/samcannas/samstack/issues"
+  },
+  "keywords": [
+    "playwright",
+    "browser-automation",
+    "ai-tools",
+    "opencode",
+    "claude-code",
+    "codex",
+    "gemini",
+    "installer"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "UPSTREAM_LICENSE",
+    "README.md"
+  ],
+  "bin": {
+    "samstack": "./dist/samstack.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "npm run build",
+    "dev": "node --import tsx src/installer.ts",
+    "browser:dev": "node --import tsx src/cli.ts",
+    "server": "node --import tsx src/server.ts"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.8.4",
+    "better-sqlite3": "^11.10.0",
+    "diff": "^7.0.0",
+    "playwright": "^1.58.2",
+    "tsx": "^4.20.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.9",
+    "typescript": "^5.9.2"
+  }
+}
