@@ -1,8 +1,8 @@
 # SamStack
 
-SamStack installs a persistent Playwright-based browser tool into AI coding harnesses like OpenCode, Claude Code, Codex CLI, Cursor, Gemini CLI, Kiro, and `.agents`-style setups.
+SamStack is a collection of tools, skills, and agents I use across AI coding harnesses.
 
-It gives those hosts a shared `samstack-web-debug` skill that can browse sites, inspect structure, click/fill elements, capture screenshots, run responsive checks, and collect console/network evidence.
+Right now it includes an installable web debugging toolchain for hosts like OpenCode, Claude Code, Codex CLI, Cursor, Gemini CLI, Kiro, and `.agents`-style setups.
 
 ## Install
 
@@ -49,7 +49,6 @@ Current installer module:
 Gemini note:
 
 - Gemini CLI skill support may require enabling Skills in Gemini settings first.
-- After install, run Gemini's skills listing command to confirm `samstack-web-debug` is visible.
 
 License note:
 
