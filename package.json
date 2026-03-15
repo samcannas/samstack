@@ -1,6 +1,6 @@
 {
   "name": "samstack",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "description": "A collection of tools, skills, and agents I use across AI coding harnesses.",
   "author": "Samuele Cannas",
@@ -29,6 +29,9 @@
   },
   "files": [
     "dist",
+    "agents",
+    "skills",
+    "tools",
     "LICENSE",
     "UPSTREAM_LICENSE",
     "README.md"

@@ -4,6 +4,20 @@ SamStack is a collection of tools, skills, and agents I use across AI coding har
 
 Right now it includes an installable web debugging toolchain for hosts like OpenCode, Claude Code, Codex CLI, Cursor, Gemini CLI, Kiro, and `.agents`-style setups.
 
+## Repo layout
+
+Top-level content folders:
+
+- `agents/` - agent definitions and prompts
+- `skills/` - reusable host-installable skills
+- `tools/` - tool modules and related assets
+
+The installer now reads installable module metadata from `tools/` and skill templates from `skills/` directly.
+
+That is enough for the content side of SamStack right now.
+
+Other top-level folders like `src/` and `scripts/` are still useful for the installer/runtime implementation, but you do not need another content folder unless you later want something like shared templates or docs.
+
 ## Install
 
 ```bash

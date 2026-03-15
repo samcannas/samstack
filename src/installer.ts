@@ -13,9 +13,8 @@ import {
   type InstallScope,
 } from './installer-hosts';
 import {
-  MODULES,
   getModuleDefinition,
-  normalizeModuleId,
+  loadModules,
   type ModuleId,
   type ModuleInput,
   type ModuleInstallContext,
@@ -61,6 +60,7 @@ interface ModuleStatus extends PreparedModuleInstall {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const packageRoot = path.resolve(getModuleDir(import.meta.url), '..');
+  const availableModules = loadModules(packageRoot);
 
   if (args.command === 'help') {
     printHelp();
@@ -79,13 +79,13 @@ async function main() {
   }
 
   const targets = await resolveTargets(hosts, args.scope, projectRoot, args.yes);
-  const modules = normalizeModuleIds(args.modules.length > 0 ? args.modules : await promptForModules());
+  const modules = normalizeModuleIds(args.modules.length > 0 ? args.modules : await promptForModules(availableModules), availableModules);
   if (modules.length === 0) {
     throw new Error('No SamStack modules selected.');
   }
 
   const runtimeStatus = getBrowserRuntimeStatus(packageRoot);
-  const prepared = prepareModuleInstalls(targets, modules, runtimeStatus);
+  const prepared = prepareModuleInstalls(packageRoot, targets, modules, runtimeStatus);
   const statuses = await getModuleStatuses(prepared, runtimeStatus);
 
   switch (args.command) {
@@ -236,10 +236,10 @@ async function promptForHosts(): Promise<HostId[]> {
   return selected as HostId[];
 }
 
-async function promptForModules(): Promise<ModuleId[]> {
+async function promptForModules(availableModules: { id: string; label: string; description: string }[]): Promise<ModuleId[]> {
   const selected = await checkbox({
     message: 'Which SamStack modules do you want to manage?',
-    choices: MODULES.map((module) => ({
+    choices: availableModules.map((module) => ({
       name: `${module.label} — ${module.description}`,
       value: module.id,
       checked: true,
@@ -248,8 +248,13 @@ async function promptForModules(): Promise<ModuleId[]> {
   return selected as ModuleId[];
 }
 
-function normalizeModuleIds(modules: ModuleInput[]): ModuleId[] {
-  return [...new Set(modules.map((moduleId) => normalizeModuleId(moduleId)))];
+function normalizeModuleIds(modules: ModuleInput[], availableModules: { id: string }[]): ModuleId[] {
+  const normalized = [...new Set(modules.map((moduleId) => moduleId.trim()).filter(Boolean))];
+  const unknown = normalized.filter((moduleId) => !availableModules.some((entry) => entry.id === moduleId));
+  if (unknown.length > 0) {
+    throw new Error(`Unknown SamStack module(s): ${unknown.join(', ')}`);
+  }
+  return normalized;
 }
 
 async function resolveTargets(
@@ -285,6 +290,7 @@ function requireHomeDir(): string {
 }
 
 function prepareModuleInstalls(
+  packageRoot: string,
   targets: HostInstallTarget[],
   modules: ModuleId[],
   runtimeStatus: BrowserRuntimeStatus,
@@ -299,7 +305,7 @@ function prepareModuleInstalls(
 
   return targets.flatMap((target) =>
     modules.map((moduleId) => {
-      const moduleDef = getModuleDefinition(moduleId);
+      const moduleDef = getModuleDefinition(packageRoot, moduleId);
       const skill = moduleDef.createSkill(target.host, context);
       return {
         target,
