@@ -1,0 +1,18 @@
+{
+  "id": "onboard",
+  "label": "Onboard",
+  "description": "Design or improve onboarding flows, empty states, and first-time user experiences. Helps users get started successfully and understand value quickly.",
+  "dependsOnRuntime": false,
+  "skillId": "onboard",
+  "skillName": "ss-onboard",
+  "skillDescription": "Design or improve onboarding flows, empty states, and first-time user experiences. Helps users get started successfully and understand value quickly.",
+  "userInvokable": true,
+  "source": "pbakaus/impeccable",
+  "args": [
+    {
+      "name": "target",
+      "description": "The feature or area needing onboarding (optional)",
+      "required": false
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 SamStack is a collection of tools, skills, and agents I use across AI coding harnesses.
 
-Right now it includes an installable web debugging toolchain for hosts like OpenCode, Claude Code, Codex CLI, Cursor, Gemini CLI, Kiro, and `.agents`-style setups.
+Right now it includes an installable web debugging toolchain plus imported design skills and commands from Impeccable for hosts like OpenCode, Claude Code, Codex CLI, Cursor, Gemini CLI, Kiro, and `.agents`-style setups.
 
 ## Repo layout
 
@@ -77,6 +77,13 @@ Current installer module:
 
 - `web-debug` - Playwright site analysis, interaction, screenshots, responsive checks, and visual debugging
 
+Imported Impeccable modules include:
+
+- `frontend-design`
+- `teach-impeccable`
+- `audit`, `critique`, `normalize`, `polish`, `distill`, `clarify`, `optimize`, `harden`
+- `animate`, `colorize`, `bolder`, `quieter`, `delight`, `extract`, `adapt`, `onboard`
+
 ## Notes
 
 Gemini note:
@@ -85,9 +92,11 @@ Gemini note:
 
 License note:
 
-- SamStack is MIT licensed.
+- SamStack contains both MIT-licensed and Apache-2.0-licensed upstream material.
 - It includes adapted MIT-licensed browser/runtime code derived from `garrytan/gstack`.
 - The upstream license text is included in `UPSTREAM_LICENSE` to satisfy MIT notice requirements.
+- It also includes imported Impeccable skills and command content under Apache 2.0.
+- The upstream Apache 2.0 license and notice are included in `UPSTREAM_IMPECCABLE_LICENSE` and `UPSTREAM_IMPECCABLE_NOTICE`.
 
 Optional dependency note:
 

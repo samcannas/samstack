@@ -2,6 +2,8 @@
 
 Put SamStack agents here.
 
+Impeccable currently contributes skills and command-style prompts, not standalone autonomous agents.
+
 Suggested structure:
 
 - one folder per agent

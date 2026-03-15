@@ -6,11 +6,10 @@ import { getModuleDir, isMainModule } from './platform';
 import {
   HOSTS,
   getHostDefinition,
-  installTargetLabel,
-  resolveHostInstallTarget,
   type HostId,
   type HostInstallTarget,
   type InstallScope,
+  resolveHostInstallTarget,
 } from './installer-hosts';
 import {
   getModuleDefinition,
@@ -18,7 +17,8 @@ import {
   type ModuleId,
   type ModuleInput,
   type ModuleInstallContext,
-  type SkillFile,
+  type SkillBundle,
+  type StackModule,
 } from './installer-modules';
 import { ensureBrowserRuntimeInstalled, getBrowserRuntimeStatus, type BrowserRuntimeStatus } from './installer-runtime';
 import {
@@ -45,11 +45,14 @@ interface ParsedArgs {
 
 interface PreparedModuleInstall {
   target: HostInstallTarget;
-  moduleId: ModuleId;
-  moduleLabel: string;
-  skill: SkillFile;
-  checksum: string;
-  filePath: string;
+  module: StackModule;
+  bundle: SkillBundle;
+  files: Array<{
+    relativePath: string;
+    absolutePath: string;
+    checksum: string;
+    content: string;
+  }>;
 }
 
 interface ModuleStatus extends PreparedModuleInstall {
@@ -74,32 +77,24 @@ async function main() {
 
   const projectRoot = path.resolve(args.projectDir || process.cwd());
   const hosts = args.hosts.length > 0 ? args.hosts : await promptForHosts();
-  if (hosts.length === 0) {
-    throw new Error('No install targets selected.');
-  }
+  if (hosts.length === 0) throw new Error('No install targets selected.');
 
   const targets = await resolveTargets(hosts, args.scope, projectRoot, args.yes);
   const modules = normalizeModuleIds(args.modules.length > 0 ? args.modules : await promptForModules(availableModules), availableModules);
-  if (modules.length === 0) {
-    throw new Error('No SamStack modules selected.');
-  }
+  if (modules.length === 0) throw new Error('No SamStack modules selected.');
 
   const runtimeStatus = getBrowserRuntimeStatus(packageRoot);
-  const prepared = prepareModuleInstalls(packageRoot, targets, modules, runtimeStatus);
+  const prepared = prepareModuleInstalls(packageRoot, targets, modules, availableModules, runtimeStatus);
   const statuses = await getModuleStatuses(prepared, runtimeStatus);
 
   switch (args.command) {
-    case 'status': {
+    case 'status':
       printStatusReport(statuses, runtimeStatus);
       return;
-    }
     case 'install': {
       const installable = statuses.filter((entry) => entry.state === 'missing');
       if (!args.yes && installable.length > 0) {
-        const proceed = await confirm({
-          message: `Install ${installable.length} missing item(s)?`,
-          default: true,
-        });
+        const proceed = await confirm({ message: `Install ${installable.length} missing item(s)?`, default: true });
         if (!proceed) return;
       }
       await applyInstall(packageRoot, installable);
@@ -108,10 +103,7 @@ async function main() {
     case 'update': {
       const updatable = statuses.filter((entry) => entry.state === 'outdated');
       if (!args.yes && updatable.length > 0) {
-        const proceed = await confirm({
-          message: `Update ${updatable.length} outdated item(s)?`,
-          default: true,
-        });
+        const proceed = await confirm({ message: `Update ${updatable.length} outdated item(s)?`, default: true });
         if (!proceed) return;
       }
       await applyInstall(packageRoot, updatable);
@@ -120,21 +112,16 @@ async function main() {
     case 'uninstall': {
       const removable = statuses.filter((entry) => entry.state !== 'missing');
       if (!args.yes && removable.length > 0) {
-        const proceed = await confirm({
-          message: `Uninstall ${removable.length} installed item(s)?`,
-          default: false,
-        });
+        const proceed = await confirm({ message: `Uninstall ${removable.length} installed item(s)?`, default: false });
         if (!proceed) return;
       }
       await applyUninstall(removable);
       return;
     }
     case 'menu':
-    default: {
+    default:
       printStatusReport(statuses, runtimeStatus);
       await runInteractiveMenu(packageRoot, statuses, runtimeStatus);
-      return;
-    }
   }
 }
 
@@ -154,12 +141,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     parsed.browserArgs = args.slice(1);
     return parsed;
   }
-
   if (args[0] && ['install', 'update', 'uninstall', 'status', 'help'].includes(args[0])) {
     parsed.command = args[0] as Command;
     args.shift();
   }
-
   if (args[0] === '--help' || args[0] === '-h' || args[0] === 'help') {
     parsed.command = 'help';
     return parsed;
@@ -174,7 +159,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     if ((token === '--module' || token === '--modules') && next) {
-      parsed.modules = next.split(',').map((value) => value.trim()).filter(Boolean) as ModuleInput[];
+      parsed.modules = next.split(',').map((value) => value.trim()).filter(Boolean);
       index++;
       continue;
     }
@@ -190,7 +175,6 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (token === '--yes' || token === '-y') {
       parsed.yes = true;
-      continue;
     }
   }
 
@@ -210,7 +194,7 @@ Usage:
 
 Options:
   --host, --hosts       Comma-separated hosts: opencode, claude-code, cursor, codex, kiro, agents, gemini
-  --module, --modules   Comma-separated modules: web-debug
+  --module, --modules   Comma-separated installed modules
   --scope               project | global
   --project-dir         Override the project root used for project installs
   --yes, -y             Skip confirmation prompts
@@ -236,19 +220,19 @@ async function promptForHosts(): Promise<HostId[]> {
   return selected as HostId[];
 }
 
-async function promptForModules(availableModules: { id: string; label: string; description: string }[]): Promise<ModuleId[]> {
+async function promptForModules(availableModules: StackModule[]): Promise<ModuleId[]> {
   const selected = await checkbox({
     message: 'Which SamStack modules do you want to manage?',
     choices: availableModules.map((module) => ({
-      name: `${module.label} — ${module.description}`,
+      name: `${module.id} -> ${module.skillName} [${getSourceLabel(module)}] - ${module.description}`,
       value: module.id,
-      checked: true,
+      checked: module.id === 'web-debug',
     })),
   });
   return selected as ModuleId[];
 }
 
-function normalizeModuleIds(modules: ModuleInput[], availableModules: { id: string }[]): ModuleId[] {
+function normalizeModuleIds(modules: ModuleInput[], availableModules: StackModule[]): ModuleId[] {
   const normalized = [...new Set(modules.map((moduleId) => moduleId.trim()).filter(Boolean))];
   const unknown = normalized.filter((moduleId) => !availableModules.some((entry) => entry.id === moduleId));
   if (unknown.length > 0) {
@@ -271,13 +255,13 @@ async function resolveTargets(
       if (assumeDefaults || host.supportedScopes.length === 1) {
         scope = host.supportedScopes[0];
       } else {
-        scope = await select({
+        scope = (await select({
           message: `Inspect ${host.label} project-local or globally?`,
           choices: host.supportedScopes.map((entry) => ({
             name: entry === 'project' ? `Project (${projectDir})` : `Global (${path.join(requireHomeDir(), host.configDirName)})`,
             value: entry,
           })),
-        }) as InstallScope;
+        })) as InstallScope;
       }
     }
     targets.push(resolveHostInstallTarget(host, scope, projectDir));
@@ -293,63 +277,77 @@ function prepareModuleInstalls(
   packageRoot: string,
   targets: HostInstallTarget[],
   modules: ModuleId[],
+  availableModules: StackModule[],
   runtimeStatus: BrowserRuntimeStatus,
 ): PreparedModuleInstall[] {
+  const commandNames = availableModules.filter((module) => module.userInvokable).map((module) => module.skillName);
   const context: ModuleInstallContext = {
     runtime: {
       runtimeDir: runtimeStatus.runtimeDir,
       browserEntryPath: runtimeStatus.browserEntryPath,
       version: runtimeStatus.expectedVersion,
     },
+    commandNames,
+    skillNameById: Object.fromEntries(availableModules.map((module) => [module.id, module.skillName])),
   };
 
   return targets.flatMap((target) =>
     modules.map((moduleId) => {
-      const moduleDef = getModuleDefinition(packageRoot, moduleId);
-      const skill = moduleDef.createSkill(target.host, context);
-      return {
-        target,
-        moduleId,
-        moduleLabel: moduleDef.label,
-        skill,
-        checksum: computeChecksum(skill.content + '\n'),
-        filePath: path.join(target.skillsDir, skill.relativeDir, skill.fileName),
-      } satisfies PreparedModuleInstall;
-    })
+      const module = getModuleDefinition(packageRoot, moduleId);
+      const bundle = module.createSkillBundle(target.host, context);
+      const files = bundle.artifacts.map((artifact) => ({
+        relativePath: artifact.relativePath.replace(/\\/g, '/'),
+        absolutePath: path.join(target.skillsDir, bundle.relativeDir, artifact.relativePath),
+        checksum: computeChecksum(artifact.content + '\n'),
+        content: artifact.content,
+      }));
+
+      return { target, module, bundle, files } satisfies PreparedModuleInstall;
+    }),
   );
 }
 
-async function getModuleStatuses(
-  prepared: PreparedModuleInstall[],
-  runtimeStatus: BrowserRuntimeStatus,
-): Promise<ModuleStatus[]> {
+async function getModuleStatuses(prepared: PreparedModuleInstall[], runtimeStatus: BrowserRuntimeStatus): Promise<ModuleStatus[]> {
   const statuses: ModuleStatus[] = [];
 
   for (const entry of prepared) {
-    const installedRecord = findInstalledTargetRecord(entry.target.rootDir, entry.target)
-      ?.modules.find((module) => module.moduleId === entry.moduleId) ?? null;
-    const installedContent = await safeReadText(entry.filePath);
+    const installedRecord = findInstalledTargetRecord(entry.target.rootDir, entry.target)?.modules.find(
+      (module) => module.moduleId === entry.module.id,
+    ) ?? null;
 
-    if (installedContent == null) {
+    let hasMissingFile = false;
+    let hasChecksumMismatch = false;
+    for (const file of entry.files) {
+      const installedContent = await safeReadText(file.absolutePath);
+      if (installedContent == null) {
+        hasMissingFile = true;
+        break;
+      }
+      const installedChecksum = computeChecksum(installedContent);
+      if (installedChecksum !== file.checksum) {
+        hasChecksumMismatch = true;
+      }
+    }
+
+    if (hasMissingFile) {
       statuses.push({
         ...entry,
         state: 'missing',
-        reason: installedRecord ? 'Manifest exists but installed file is missing.' : 'Not installed.',
+        reason: installedRecord ? 'Manifest exists but one or more installed files are missing.' : 'Not installed.',
       });
       continue;
     }
 
-    const installedChecksum = computeChecksum(installedContent);
-    if (installedChecksum !== entry.checksum) {
+    if (hasChecksumMismatch || !manifestMatchesBundle(installedRecord, entry)) {
       statuses.push({
         ...entry,
         state: 'outdated',
-        reason: 'Installed file differs from the current SamStack version.',
+        reason: 'Installed files differ from the current SamStack version.',
       });
       continue;
     }
 
-    if (!runtimeStatus.upToDate) {
+    if (entry.module.dependsOnRuntime && !runtimeStatus.upToDate) {
       statuses.push({
         ...entry,
         state: 'outdated',
@@ -358,14 +356,19 @@ async function getModuleStatuses(
       continue;
     }
 
-    statuses.push({
-      ...entry,
-      state: 'installed',
-      reason: 'Installed and up to date.',
-    });
+    statuses.push({ ...entry, state: 'installed', reason: 'Installed and up to date.' });
   }
 
   return statuses;
+}
+
+function manifestMatchesBundle(installedRecord: InstalledModuleRecord | null, entry: PreparedModuleInstall): boolean {
+  if (!installedRecord) return false;
+  if (installedRecord.relativeDir !== entry.bundle.relativeDir) return false;
+  if (installedRecord.files.length !== entry.files.length) return false;
+
+  const expected = new Map(entry.files.map((file) => [file.relativePath, file.checksum]));
+  return installedRecord.files.every((file) => expected.get(file.relativePath) === file.checksum);
 }
 
 function printStatusReport(statuses: ModuleStatus[], runtimeStatus: BrowserRuntimeStatus): void {
@@ -379,49 +382,29 @@ function printStatusReport(statuses: ModuleStatus[], runtimeStatus: BrowserRunti
   console.log(`Browser runtime: ${runtimeLabel}`);
   console.log('');
   for (const entry of statuses) {
-    console.log(`- ${entry.target.host.label} (${entry.target.scope}) / ${entry.moduleId}: ${entry.state} - ${entry.reason}`);
+    console.log(`- ${entry.target.host.label} (${entry.target.scope}) / ${entry.module.id} -> ${entry.module.skillName} [${getSourceLabel(entry.module)}]: ${entry.state} - ${entry.reason}`);
   }
 }
 
-async function runInteractiveMenu(
-  packageRoot: string,
-  statuses: ModuleStatus[],
-  runtimeStatus: BrowserRuntimeStatus,
-): Promise<void> {
+async function runInteractiveMenu(packageRoot: string, statuses: ModuleStatus[], runtimeStatus: BrowserRuntimeStatus): Promise<void> {
   const missingCount = statuses.filter((entry) => entry.state === 'missing').length;
   const outdatedCount = statuses.filter((entry) => entry.state === 'outdated').length;
   const installedCount = statuses.filter((entry) => entry.state !== 'missing').length;
   const syncCount = missingCount + outdatedCount;
 
-  const choices = [] as { name: string; value: string }[];
+  const choices: Array<{ name: string; value: string }> = [];
   if (syncCount > 0) choices.push({ name: `Install or update all needed (${syncCount})`, value: 'sync' });
   if (missingCount > 0) choices.push({ name: `Install missing (${missingCount})`, value: 'install' });
   if (outdatedCount > 0) choices.push({ name: `Update outdated (${outdatedCount})`, value: 'update' });
   if (installedCount > 0) choices.push({ name: `Uninstall installed (${installedCount})`, value: 'uninstall' });
   choices.push({ name: 'Exit', value: 'exit' });
 
-  const action = await select({
-    message: 'Choose an action',
-    choices,
-  });
-
+  const action = await select({ message: 'Choose an action', choices });
   if (action === 'exit') return;
-  if (action === 'sync') {
-    await applyInstall(packageRoot, statuses.filter((entry) => entry.state !== 'installed'));
-    return;
-  }
-  if (action === 'install') {
-    await applyInstall(packageRoot, statuses.filter((entry) => entry.state === 'missing'));
-    return;
-  }
-  if (action === 'update') {
-    await applyInstall(packageRoot, statuses.filter((entry) => entry.state === 'outdated'));
-    return;
-  }
-  if (action === 'uninstall') {
-    await applyUninstall(statuses.filter((entry) => entry.state !== 'missing'));
-    return;
-  }
+  if (action === 'sync') return applyInstall(packageRoot, statuses.filter((entry) => entry.state !== 'installed'));
+  if (action === 'install') return applyInstall(packageRoot, statuses.filter((entry) => entry.state === 'missing'));
+  if (action === 'update') return applyInstall(packageRoot, statuses.filter((entry) => entry.state === 'outdated'));
+  if (action === 'uninstall') return applyUninstall(statuses.filter((entry) => entry.state !== 'missing'));
 }
 
 async function applyInstall(packageRoot: string, statuses: ModuleStatus[]): Promise<void> {
@@ -430,7 +413,8 @@ async function applyInstall(packageRoot: string, statuses: ModuleStatus[]): Prom
     return;
   }
 
-  const runtime = await ensureBrowserRuntimeInstalled(packageRoot);
+  const needsRuntime = statuses.some((entry) => entry.module.dependsOnRuntime);
+  const runtime = needsRuntime ? await ensureBrowserRuntimeInstalled(packageRoot) : null;
   const byTarget = new Map<string, ModuleStatus[]>();
   for (const entry of statuses) {
     const key = `${entry.target.rootDir}:${entry.target.host.id}:${entry.target.scope}`;
@@ -445,36 +429,35 @@ async function applyInstall(packageRoot: string, statuses: ModuleStatus[]): Prom
     await fsp.mkdir(target.skillsDir, { recursive: true });
 
     for (const entry of entries) {
-      const skillDir = path.join(target.skillsDir, entry.skill.relativeDir);
+      const skillDir = path.join(target.skillsDir, entry.bundle.relativeDir);
       await fsp.mkdir(skillDir, { recursive: true });
-      await fsp.writeFile(path.join(skillDir, entry.skill.fileName), entry.skill.content + '\n', 'utf-8');
-      summary.push(`${entry.target.host.label} (${entry.target.scope}): ${entry.moduleLabel}`);
+      for (const file of entry.files) {
+        const outputPath = path.join(skillDir, file.relativePath);
+        await fsp.mkdir(path.dirname(outputPath), { recursive: true });
+        await fsp.writeFile(outputPath, file.content + '\n', 'utf-8');
+      }
+      summary.push(`${entry.target.host.label} (${entry.target.scope}): ${entry.module.skillName} [${getSourceLabel(entry.module)}]`);
     }
 
     const currentRecord = findInstalledTargetRecord(target.rootDir, target);
     const currentModules = new Map<ModuleId, InstalledModuleRecord>();
-    for (const module of currentRecord?.modules ?? []) {
-      currentModules.set(module.moduleId, module);
-    }
+    for (const module of currentRecord?.modules ?? []) currentModules.set(module.moduleId, module);
     for (const entry of entries) {
-      currentModules.set(entry.moduleId, {
-        moduleId: entry.moduleId,
-        relativeDir: entry.skill.relativeDir,
-        fileName: entry.skill.fileName,
-        checksum: entry.checksum,
+      currentModules.set(entry.module.id, {
+        moduleId: entry.module.id,
+        relativeDir: entry.bundle.relativeDir,
+        files: entry.files.map((file) => ({ relativePath: file.relativePath, checksum: file.checksum })),
         installedAt: new Date().toISOString(),
       });
     }
 
-    await writeTargetManifest(target.rootDir, runtime.version, target, [...currentModules.values()]);
+    await writeTargetManifest(target.rootDir, runtime?.version ?? 'content-only', target, [...currentModules.values()]);
   }
 
   console.log('');
   console.log('SamStack changes applied.');
-  console.log(`- Browser runtime: ${runtime.browserEntryPath}`);
-  for (const line of summary) {
-    console.log(`- ${line}`);
-  }
+  if (runtime) console.log(`- Browser runtime: ${runtime.browserEntryPath}`);
+  for (const line of summary) console.log(`- ${line}`);
 }
 
 async function applyUninstall(statuses: ModuleStatus[]): Promise<void> {
@@ -495,28 +478,28 @@ async function applyUninstall(statuses: ModuleStatus[]): Promise<void> {
   for (const entries of byTarget.values()) {
     const target = entries[0].target;
     for (const entry of entries) {
-      await fsp.rm(path.join(target.skillsDir, entry.skill.relativeDir), { recursive: true, force: true });
-      summary.push(`${entry.target.host.label} (${entry.target.scope}): ${entry.moduleLabel}`);
+      await fsp.rm(path.join(target.skillsDir, entry.bundle.relativeDir), { recursive: true, force: true });
+      summary.push(`${entry.target.host.label} (${entry.target.scope}): ${entry.module.skillName} [${getSourceLabel(entry.module)}]`);
     }
-    await removeModulesFromManifest(target.rootDir, target, entries.map((entry) => entry.moduleId));
+    await removeModulesFromManifest(target.rootDir, target, entries.map((entry) => entry.module.id));
   }
 
   console.log('');
   console.log('SamStack items uninstalled.');
-  for (const line of summary) {
-    console.log(`- ${line}`);
-  }
+  for (const line of summary) console.log(`- ${line}`);
   console.log('- Shared browser runtime was left in place at ~/.samstack/runtime/browser.');
 }
 
 function runEmbeddedBrowser(args: string[]) {
   const runtimeEntry = path.join(getModuleDir(import.meta.url), 'runtime', 'samstack-browser.js');
-  const result = spawnSync(process.execPath, [runtimeEntry, ...args], {
-    stdio: 'inherit',
-    shell: false,
-  });
-
+  const result = spawnSync(process.execPath, [runtimeEntry, ...args], { stdio: 'inherit', shell: false });
   process.exit(result.status ?? 1);
+}
+
+function getSourceLabel(module: StackModule): string {
+  if (module.source === 'pbakaus/impeccable') return 'impeccable';
+  if (module.source === 'samstack') return 'samstack';
+  return module.source ?? 'unknown';
 }
 
 if (isMainModule(import.meta.url)) {

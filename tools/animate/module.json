@@ -1,0 +1,18 @@
+{
+  "id": "animate",
+  "label": "Animate",
+  "description": "Review a feature and enhance it with purposeful animations, micro-interactions, and motion effects that improve usability and delight.",
+  "dependsOnRuntime": false,
+  "skillId": "animate",
+  "skillName": "ss-animate",
+  "skillDescription": "Review a feature and enhance it with purposeful animations, micro-interactions, and motion effects that improve usability and delight.",
+  "userInvokable": true,
+  "source": "pbakaus/impeccable",
+  "args": [
+    {
+      "name": "target",
+      "description": "The feature or component to animate (optional)",
+      "required": false
+    }
+  ]
+}

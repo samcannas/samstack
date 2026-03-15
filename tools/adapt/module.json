@@ -1,0 +1,23 @@
+{
+  "id": "adapt",
+  "label": "Adapt",
+  "description": "Adapt designs to work across different screen sizes, devices, contexts, or platforms. Ensures consistent experience across varied environments.",
+  "dependsOnRuntime": false,
+  "skillId": "adapt",
+  "skillName": "ss-adapt",
+  "skillDescription": "Adapt designs to work across different screen sizes, devices, contexts, or platforms. Ensures consistent experience across varied environments.",
+  "userInvokable": true,
+  "source": "pbakaus/impeccable",
+  "args": [
+    {
+      "name": "target",
+      "description": "The feature or component to adapt (optional)",
+      "required": false
+    },
+    {
+      "name": "context",
+      "description": "What to adapt for (mobile, tablet, desktop, print, email, etc.)",
+      "required": false
+    }
+  ]
+}

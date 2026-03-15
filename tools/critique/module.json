@@ -1,0 +1,18 @@
+{
+  "id": "critique",
+  "label": "Critique",
+  "description": "Evaluate design effectiveness from a UX perspective. Assesses visual hierarchy, information architecture, emotional resonance, and overall design quality with actionable feedback.",
+  "dependsOnRuntime": false,
+  "skillId": "critique",
+  "skillName": "ss-critique",
+  "skillDescription": "Evaluate design effectiveness from a UX perspective. Assesses visual hierarchy, information architecture, emotional resonance, and overall design quality with actionable feedback.",
+  "userInvokable": true,
+  "source": "pbakaus/impeccable",
+  "args": [
+    {
+      "name": "area",
+      "description": "The feature or area to critique (optional)",
+      "required": false
+    }
+  ]
+}

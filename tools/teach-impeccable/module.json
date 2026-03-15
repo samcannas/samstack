@@ -1,0 +1,11 @@
+{
+  "id": "teach-impeccable",
+  "label": "Teach Impeccable",
+  "description": "One-time setup that gathers design context for your project and saves it to your AI config file. Run once to establish persistent design guidelines.",
+  "dependsOnRuntime": false,
+  "skillId": "teach-impeccable",
+  "skillName": "ss-teach-impeccable",
+  "skillDescription": "One-time setup that gathers design context for your project and saves it to your AI config file. Run once to establish persistent design guidelines.",
+  "userInvokable": true,
+  "source": "pbakaus/impeccable"
+}

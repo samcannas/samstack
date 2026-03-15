@@ -1,0 +1,18 @@
+{
+  "id": "normalize",
+  "label": "Normalize",
+  "description": "Normalize design to match your design system and ensure consistency",
+  "dependsOnRuntime": false,
+  "skillId": "normalize",
+  "skillName": "ss-normalize",
+  "skillDescription": "Normalize design to match your design system and ensure consistency",
+  "userInvokable": true,
+  "source": "pbakaus/impeccable",
+  "args": [
+    {
+      "name": "feature",
+      "description": "The page, route, or feature to normalize (optional)",
+      "required": false
+    }
+  ]
+}

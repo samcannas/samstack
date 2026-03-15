@@ -4,7 +4,7 @@
   "private": false,
   "description": "A collection of tools, skills, and agents I use across AI coding harnesses.",
   "author": "Samuele Cannas",
-  "license": "MIT",
+  "license": "MIT AND Apache-2.0",
   "type": "module",
   "homepage": "https://github.com/samcannas/samstack#readme",
   "repository": {
@@ -34,6 +34,8 @@
     "tools",
     "LICENSE",
     "UPSTREAM_LICENSE",
+    "UPSTREAM_IMPECCABLE_LICENSE",
+    "UPSTREAM_IMPECCABLE_NOTICE",
     "README.md"
   ],
   "bin": {

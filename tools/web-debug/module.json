@@ -4,6 +4,8 @@
   "description": "Installs the browser runtime and a host skill for browsing, interaction, screenshots, responsive checks, and evidence gathering.",
   "dependsOnRuntime": true,
   "skillId": "web-debug",
-  "skillName": "samstack-web-debug",
-  "skillDescription": "Inspect, interact with, and visually debug websites using the SamStack Playwright runtime."
+  "skillName": "ss-web-debug",
+  "skillDescription": "Inspect, interact with, and visually debug websites using the SamStack Playwright runtime.",
+  "userInvokable": true,
+  "source": "samstack / gstack"
 }

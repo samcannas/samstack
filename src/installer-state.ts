@@ -5,11 +5,15 @@ import * as path from 'node:path';
 import type { HostId, HostInstallTarget, InstallScope } from './installer-hosts';
 import type { ModuleId } from './installer-modules';
 
+export interface InstalledModuleFileRecord {
+  relativePath: string;
+  checksum: string;
+}
+
 export interface InstalledModuleRecord {
   moduleId: ModuleId;
   relativeDir: string;
-  fileName: string;
-  checksum: string;
+  files: InstalledModuleFileRecord[];
   installedAt: string;
 }
 
@@ -59,7 +63,7 @@ export async function writeTargetManifest(
   manifest.runtimeVersion = runtimeVersion;
 
   const existingIndex = manifest.targets.findIndex((entry) =>
-    entry.host === target.host.id && entry.scope === target.scope && entry.skillsDir === target.skillsDir
+    entry.host === target.host.id && entry.scope === target.scope && entry.skillsDir === target.skillsDir,
   );
 
   const targetRecord: InstalledTargetRecord = {
@@ -87,12 +91,13 @@ export async function removeModulesFromManifest(
   if (!manifest) return;
 
   const existingIndex = manifest.targets.findIndex((entry) =>
-    entry.host === target.host.id && entry.scope === target.scope && entry.skillsDir === target.skillsDir
+    entry.host === target.host.id && entry.scope === target.scope && entry.skillsDir === target.skillsDir,
   );
   if (existingIndex < 0) return;
 
-  manifest.targets[existingIndex].modules = manifest.targets[existingIndex].modules
-    .filter((entry) => !moduleIds.includes(entry.moduleId));
+  manifest.targets[existingIndex].modules = manifest.targets[existingIndex].modules.filter(
+    (entry) => !moduleIds.includes(entry.moduleId),
+  );
 
   if (manifest.targets[existingIndex].modules.length === 0) {
     manifest.targets.splice(existingIndex, 1);
@@ -105,9 +110,11 @@ export async function removeModulesFromManifest(
 export function findInstalledTargetRecord(rootDir: string, target: HostInstallTarget): InstalledTargetRecord | null {
   const manifest = readInstallManifest(rootDir);
   if (!manifest) return null;
-  return manifest.targets.find((entry) =>
-    entry.host === target.host.id && entry.scope === target.scope && entry.skillsDir === target.skillsDir
-  ) ?? null;
+  return (
+    manifest.targets.find(
+      (entry) => entry.host === target.host.id && entry.scope === target.scope && entry.skillsDir === target.skillsDir,
+    ) ?? null
+  );
 }
 
 export async function safeReadText(filePath: string): Promise<string | null> {

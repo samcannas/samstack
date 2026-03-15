@@ -1,0 +1,18 @@
+{
+  "id": "audit",
+  "label": "Audit",
+  "description": "Perform comprehensive audit of interface quality across accessibility, performance, theming, and responsive design. Generates detailed report of issues with severity ratings and recommendations.",
+  "dependsOnRuntime": false,
+  "skillId": "audit",
+  "skillName": "ss-audit",
+  "skillDescription": "Perform comprehensive audit of interface quality across accessibility, performance, theming, and responsive design. Generates detailed report of issues with severity ratings and recommendations.",
+  "userInvokable": true,
+  "source": "pbakaus/impeccable",
+  "args": [
+    {
+      "name": "area",
+      "description": "The feature or area to audit (optional)",
+      "required": false
+    }
+  ]
+}
